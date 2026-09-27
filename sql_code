@@ -1,0 +1,204 @@
+import getpass
+import os
+
+import mysql.connector
+import pandas as pd
+
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+DB_HOST = "localhost"
+DB_USER = "root"
+DB_NAME = "uae_fraud_analytics"
+
+DATA_DIR = "data/raw"
+
+
+# ============================================================
+# DATABASE CONNECTION
+# ============================================================
+
+def get_connection():
+    password = getpass.getpass("Enter MySQL root password: ")
+
+    return mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=password,
+        database=DB_NAME
+    )
+
+
+# ============================================================
+# LOAD DATAFRAME INTO MYSQL
+# ============================================================
+
+def load_table(connection, csv_file, table_name, columns, chunk_size=5000):
+
+    file_path = os.path.join(DATA_DIR, csv_file)
+
+    print(f"\nLoading {csv_file} → {table_name}")
+
+    df = pd.read_csv(file_path)
+
+    # Keep only the columns that belong to the MySQL table
+    df = df[columns]
+
+    # Convert NaN to None for MySQL
+    df = df.where(pd.notnull(df), None)
+
+    column_names = ", ".join(columns)
+    placeholders = ", ".join(["%s"] * len(columns))
+
+    query = f"""
+        INSERT INTO {table_name}
+        ({column_names})
+        VALUES ({placeholders})
+    """
+
+    cursor = connection.cursor()
+
+    total_rows = len(df)
+
+    for start in range(0, total_rows, chunk_size):
+
+        chunk = df.iloc[start:start + chunk_size]
+
+        records = [
+            tuple(row)
+            for row in chunk.itertuples(index=False, name=None)
+        ]
+
+        cursor.executemany(query, records)
+
+        connection.commit()
+
+        loaded = min(start + chunk_size, total_rows)
+
+        print(f"  Loaded {loaded:,}/{total_rows:,}")
+
+    cursor.close()
+
+    print(f"✓ {table_name} loaded successfully")
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    print("=" * 60)
+    print("UAE FRAUD ANALYTICS - MYSQL DATA LOADER")
+    print("=" * 60)
+
+    connection = get_connection()
+
+    try:
+
+        # ----------------------------------------------------
+        # 1. CUSTOMERS
+        # ----------------------------------------------------
+
+        load_table(
+            connection,
+            "customers.csv",
+            "customers",
+            [
+                "customer_id",
+                "full_name",
+                "age",
+                "gender",
+                "city",
+                "customer_since"
+            ]
+        )
+
+        # ----------------------------------------------------
+        # 2. ACCOUNTS
+        # ----------------------------------------------------
+
+        load_table(
+            connection,
+            "accounts.csv",
+            "accounts",
+            [
+                "account_id",
+                "customer_id",
+                "account_type",
+                "balance",
+                "account_status",
+                "created_date"
+            ]
+        )
+
+        # ----------------------------------------------------
+        # 3. MERCHANTS
+        # ----------------------------------------------------
+
+        load_table(
+            connection,
+            "merchants.csv",
+            "merchants",
+            [
+                "merchant_id",
+                "merchant_name",
+                "merchant_category",
+                "city",
+                "country",
+                "risk_category"
+            ]
+        )
+
+        # ----------------------------------------------------
+        # 4. LOCATIONS
+        # ----------------------------------------------------
+
+        load_table(
+            connection,
+            "locations.csv",
+            "locations",
+            [
+                "location_id",
+                "city",
+                "emirate",
+                "country",
+                "latitude",
+                "longitude"
+            ]
+        )
+
+        # ----------------------------------------------------
+        # 5. TRANSACTIONS
+        # ----------------------------------------------------
+
+        load_table(
+            connection,
+            "transactions.csv",
+            "transactions",
+            [
+                "transaction_id",
+                "account_id",
+                "merchant_id",
+                "location_id",
+                "transaction_date",
+                "transaction_time",
+                "amount",
+                "transaction_type",
+                "payment_method",
+                "status"
+            ]
+        )
+
+        print("\n" + "=" * 60)
+        print("DATA LOADING COMPLETE")
+        print("=" * 60)
+
+    finally:
+        connection.close()
+
+
+if __name__ == "__main__":
+    main()
