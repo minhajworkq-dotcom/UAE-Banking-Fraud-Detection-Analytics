@@ -1,0 +1,297 @@
+import random
+from datetime import date, timedelta
+
+import pandas as pd
+from faker import Faker
+
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+fake = Faker("en_US")
+Faker.seed(42)
+random.seed(42)
+
+NUM_CUSTOMERS = 5000
+NUM_ACCOUNTS = 7000
+NUM_MERCHANTS = 200
+NUM_TRANSACTIONS = 100000
+
+
+# ============================================================
+# UAE REFERENCE DATA
+# ============================================================
+
+UAE_CITIES = [
+    ("Dubai", "Dubai", 25.2048, 55.2708),
+    ("Abu Dhabi", "Abu Dhabi", 24.4539, 54.3773),
+    ("Sharjah", "Sharjah", 25.3463, 55.4209),
+    ("Ajman", "Ajman", 25.4052, 55.5136),
+    ("Ras Al Khaimah", "Ras Al Khaimah", 25.7895, 55.9432),
+    ("Fujairah", "Fujairah", 25.1288, 56.3265),
+    ("Umm Al Quwain", "Umm Al Quwain", 25.5647, 55.5552),
+]
+
+MERCHANT_CATEGORIES = [
+    "Grocery",
+    "Fuel",
+    "Restaurant",
+    "Retail",
+    "Electronics",
+    "Travel",
+    "Hotel",
+    "Healthcare",
+    "Entertainment",
+    "Online Services",
+]
+
+ACCOUNT_TYPES = [
+    "Savings",
+    "Current",
+    "Salary",
+]
+
+PAYMENT_METHODS = [
+    "Debit Card",
+    "Credit Card",
+    "Online Banking",
+    "Mobile Wallet",
+]
+
+TRANSACTION_TYPES = [
+    "Purchase",
+    "ATM Withdrawal",
+    "Transfer",
+    "Online Payment",
+]
+
+
+# ============================================================
+# 1. GENERATE CUSTOMERS
+# ============================================================
+
+def generate_customers():
+    customers = []
+
+    for customer_id in range(1, NUM_CUSTOMERS + 1):
+        city, _, _, _ = random.choice(UAE_CITIES)
+
+        customers.append({
+            "customer_id": customer_id,
+            "full_name": fake.name(),
+            "age": random.randint(21, 65),
+            "gender": random.choice(["Male", "Female"]),
+            "city": city,
+            "customer_since": fake.date_between(
+                start_date="-10y",
+                end_date="-6m"
+            ),
+        })
+
+    return pd.DataFrame(customers)
+
+
+# ============================================================
+# 2. GENERATE ACCOUNTS
+# ============================================================
+
+def generate_accounts():
+    accounts = []
+
+    for account_id in range(1, NUM_ACCOUNTS + 1):
+        customer_id = random.randint(1, NUM_CUSTOMERS)
+
+        accounts.append({
+            "account_id": account_id,
+            "customer_id": customer_id,
+            "account_type": random.choice(ACCOUNT_TYPES),
+            "balance": round(random.uniform(500, 250000), 2),
+            "account_status": random.choices(
+                ["Active", "Dormant", "Blocked"],
+                weights=[95, 4, 1]
+            )[0],
+            "created_date": fake.date_between(
+                start_date="-8y",
+                end_date="-30d"
+            ),
+        })
+
+    return pd.DataFrame(accounts)
+
+
+# ============================================================
+# 3. GENERATE MERCHANTS
+# ============================================================
+
+def generate_merchants():
+    merchants = []
+
+    for merchant_id in range(1, NUM_MERCHANTS + 1):
+        city, _, _, _ = random.choice(UAE_CITIES)
+
+        category = random.choice(MERCHANT_CATEGORIES)
+
+        risk_category = random.choices(
+            ["Low", "Medium", "High"],
+            weights=[75, 20, 5]
+        )[0]
+
+        merchants.append({
+            "merchant_id": merchant_id,
+            "merchant_name": fake.company(),
+            "merchant_category": category,
+            "city": city,
+            "country": "UAE",
+            "risk_category": risk_category,
+        })
+
+    return pd.DataFrame(merchants)
+
+
+# ============================================================
+# 4. GENERATE LOCATIONS
+# ============================================================
+
+def generate_locations():
+    locations = []
+
+    for location_id, (city, emirate, lat, lon) in enumerate(
+        UAE_CITIES, start=1
+    ):
+        locations.append({
+            "location_id": location_id,
+            "city": city,
+            "emirate": emirate,
+            "country": "UAE",
+            "latitude": lat,
+            "longitude": lon,
+        })
+
+    return pd.DataFrame(locations)
+
+
+# ============================================================
+# 5. GENERATE TRANSACTIONS
+# ============================================================
+
+def generate_transactions(accounts, merchants):
+    transactions = []
+
+    account_ids = accounts["account_id"].tolist()
+    merchant_ids = merchants["merchant_id"].tolist()
+
+    for transaction_id in range(1, NUM_TRANSACTIONS + 1):
+
+        account_id = random.choice(account_ids)
+        merchant_id = random.choice(merchant_ids)
+
+        transaction_date = fake.date_between(
+            start_date="-365d",
+            end_date="today"
+        )
+
+        transaction_time = fake.time()
+
+        transaction_type = random.choice(TRANSACTION_TYPES)
+
+        # Normal transaction amount
+        if transaction_type == "ATM Withdrawal":
+            amount = round(random.uniform(100, 3000), 2)
+
+        elif transaction_type == "Transfer":
+            amount = round(random.uniform(500, 15000), 2)
+
+        else:
+            amount = round(random.uniform(20, 5000), 2)
+
+        location_id = random.randint(1, len(UAE_CITIES))
+
+        payment_method = random.choice(PAYMENT_METHODS)
+
+        status = random.choices(
+            ["Completed", "Failed", "Pending"],
+            weights=[96, 3, 1]
+        )[0]
+
+        transactions.append({
+            "transaction_id": transaction_id,
+            "account_id": account_id,
+            "merchant_id": merchant_id,
+            "location_id": location_id,
+            "transaction_date": transaction_date,
+            "transaction_time": transaction_time,
+            "amount": amount,
+            "transaction_type": transaction_type,
+            "payment_method": payment_method,
+            "status": status,
+        })
+
+    return pd.DataFrame(transactions)
+
+
+# ============================================================
+# 6. MAIN
+# ============================================================
+
+def main():
+
+    print("Generating customers...")
+    customers = generate_customers()
+
+    print("Generating accounts...")
+    accounts = generate_accounts()
+
+    print("Generating merchants...")
+    merchants = generate_merchants()
+
+    print("Generating locations...")
+    locations = generate_locations()
+
+    print("Generating transactions...")
+    transactions = generate_transactions(
+        accounts,
+        merchants
+    )
+
+    # Create directories if needed
+    customers.to_csv(
+        "data/raw/customers.csv",
+        index=False
+    )
+
+    accounts.to_csv(
+        "data/raw/accounts.csv",
+        index=False
+    )
+
+    merchants.to_csv(
+        "data/raw/merchants.csv",
+        index=False
+    )
+
+    locations.to_csv(
+        "data/raw/locations.csv",
+        index=False
+    )
+
+    transactions.to_csv(
+        "data/raw/transactions.csv",
+        index=False
+    )
+
+    print("\n===================================")
+    print("DATA GENERATION COMPLETE")
+    print("===================================")
+
+    print(f"Customers:    {len(customers):,}")
+    print(f"Accounts:     {len(accounts):,}")
+    print(f"Merchants:    {len(merchants):,}")
+    print(f"Locations:    {len(locations):,}")
+    print(f"Transactions: {len(transactions):,}")
+
+    print("\nFiles saved to data/raw/")
+
+
+if __name__ == "__main__":
+    main()
